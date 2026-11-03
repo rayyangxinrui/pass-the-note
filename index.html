@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>Pass the Note</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap">
+<style>
+/* Layout: a slim HUD of the five notes above a top-down classroom canvas; intro and result cards sit over the canvas; rules below. */
+:root{
+  --bg:#e4eae4; --surface:#f6f8f4; --ink:#22302a; --muted:#5f6f66; --line:#c8d3ca;
+  --chalk:#2f4a3f; --redpen:#c8322b; --pencil:#f0b400; --pencil-ink:#3a2c00; --ok:#3f8a55;
+  --font-display:"Patrick Hand","Comic Sans MS",cursive;
+  --font-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#18221e; --surface:#212e29; --ink:#e4ebe6; --muted:#9db0a5; --line:#34453d;
+    --chalk:#cfe3d6; --redpen:#ff6b5e; --pencil:#f5c22e; --pencil-ink:#2a2000; --ok:#6cc487;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#18221e; --surface:#212e29; --ink:#e4ebe6; --muted:#9db0a5; --line:#34453d;
+  --chalk:#cfe3d6; --redpen:#ff6b5e; --pencil:#f5c22e; --pencil-ink:#2a2000; --ok:#6cc487;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
+#app{max-width:1000px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:12px}
+h1,h2{font-family:var(--font-display);font-weight:400;margin:0;color:var(--chalk);text-wrap:balance}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 16px}
+button:focus-visible{outline:3px solid var(--pencil);outline-offset:2px}
+.btn-main{background:var(--pencil);color:var(--pencil-ink);border-color:var(--pencil);font-weight:600;font-size:17px;padding:10px 26px}
+
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top h1{font-size:34px;line-height:1}
+.stat{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.stat b{color:var(--ink);font-weight:600}
+.top .stat:first-of-type{margin-left:auto}
+
+.notes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.slot{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.slot .row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:13px}
+.slot .nm{font-weight:600;white-space:nowrap}
+.slot .ct{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--pencil);transition:width .25s}
+.slot.hot .bar i{background:var(--redpen)}
+.slot.hot .ct{color:var(--redpen)}
+.slot.done{border-color:var(--ok)}
+.slot.done .ct{color:var(--ok)}
+.slot.wait{opacity:.55}
+@media (max-width:560px){.notes{gap:4px}.slot{padding:4px 6px}.slot .row{flex-direction:column;gap:0;font-size:11px}}
+
+.stage{position:relative;width:100%;aspect-ratio:960/720;max-width:100%;border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.16)}
+canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+.stage:focus-within{box-shadow:0 0 0 3px var(--pencil),0 10px 30px rgba(0,0,0,.16)}
+.over{position:absolute;inset:0;display:grid;place-items:center;background:rgba(20,30,25,.55);padding:16px}
+.card{background:var(--surface);border-radius:14px;padding:22px 24px;max-width:460px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 14px 34px rgba(0,0,0,.25);max-height:100%;overflow-y:auto}
+.card h2{font-size:clamp(28px,5vw,42px);line-height:1.05}
+.card p{margin:0}
+.card .muted{color:var(--muted);font-size:13px}
+kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--bg)}
+.rules{display:flex;flex-direction:column;gap:6px;max-width:44em}
+.rules h2{font-size:24px}
+.rules ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;color:var(--muted)}
+@media (max-width:560px){.card{padding:16px}}
+.controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,44px);gap:6px;user-select:none;-webkit-user-select:none}
+.pad button{padding:0;font-size:18px;touch-action:none}
+.pad button[data-dir="up"]{grid-column:2;grid-row:1}
+.pad button[data-dir="left"]{grid-column:1;grid-row:2}
+.pad button[data-dir="down"]{grid-column:2;grid-row:2}
+.pad button[data-dir="right"]{grid-column:3;grid-row:2}
+.pad button.on{background:var(--pencil);color:var(--pencil-ink);border-color:var(--pencil)}
+.diag{margin:0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:0;flex:1}
+.diag.err{color:var(--redpen)}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top">
+    <h1>Pass the Note</h1>
+    <span class="stat">Confiscated <b id="caughtTxt">0</b> / 5</span>
+    <span class="stat">Time <b id="timeTxt">0:00</b></span>
+  </header>
+  <div class="notes" id="notes"></div>
+  <div class="stage">
+    <canvas id="cv" width="960" height="720" tabindex="0" aria-label="Classroom. Use WASD or arrow keys to walk, or click where you want to go."></canvas>
+    <div class="over" id="introCard">
+      <div class="card">
+        <h2>Someone's passing notes!</h2>
+        <p>Confiscate all 5 notes. If any note gets passed 10 times, the whole class knows and you lose.</p>
+        <p class="muted">Desktop: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys, or click where you want to walk. Phone: tap where you want to walk.</p>
+        <button class="btn-main" id="startBtn">Start class</button>
+      </div>
+    </div>
+    <div class="over" id="endCard" hidden>
+      <div class="card">
+        <h2 id="endTitle"></h2>
+        <p id="endText"></p>
+        <p class="muted" id="endBest"></p>
+        <button class="btn-main" id="againBtn">Teach another class</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="pad" aria-label="Walk buttons">
+      <button type="button" data-dir="up" aria-label="Walk up">▲</button>
+      <button type="button" data-dir="left" aria-label="Walk left">◀</button>
+      <button type="button" data-dir="down" aria-label="Walk down">▼</button>
+      <button type="button" data-dir="right" aria-label="Walk right">▶</button>
+    </div>
+    <p class="diag" id="diag">Loading…</p>
+  </div>
+  <section class="rules">
+    <h2>How it works</h2>
+    <ul>
+      <li>You're the teacher. Students toss notes to each other. There are 5 notes in total, and a new one appears every few seconds.</li>
+      <li>Every time a note lands in a student's hands, its count goes up by 1. The number on the little paper in their hand is that count. If any note reaches <b>10</b>, you lose.</li>
+      <li>Missed throws land on the floor. Walk over before the red ring runs out to confiscate it, or the nearest student picks it up.</li>
+      <li>You can also intercept a note mid-air by walking under it.</li>
+      <li>The pale red circle around you is your stare. A student holding a note inside it panics and throws early, and panicked throws miss more often.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+// show any script error on the page itself, so a broken game says why
+window.addEventListener('error', e => { const d = document.getElementById('diag'); if (d) { d.textContent = 'Error: ' + e.message + ' (line ' + e.lineno + ')'; d.classList.add('err'); } });
+(() => {
+'use strict';
+const W = 960, H = 720;
+const MAX_COUNT = 10, NOTE_N = 5;
+const TEACHER_SPEED = 205, TEACHER_R = 13;
+const PANIC_R = 140, CATCH_FLY = 26, CATCH_FLOOR = 28, FLOOR_TIME = 3.0;
+const SPAWN_AT = [0, 5, 10, 16, 22];
+const NOTE_NAMES = ['Note 1', 'Note 2', 'Note 3', 'Note 4', 'Note 5'];
+const NAMES = ['Mia', 'Leo', 'Sam', 'Ava', 'Noah', 'Lily', 'Max', 'Zoe', 'Ben', 'Ella', 'Jack', 'Ruby', 'Owen', 'Ivy', 'Theo', 'Nora', 'Finn', 'Luna', 'Eli', 'Rosa'];
+const SHIRTS = ['#7aa6c2', '#e39b7b', '#9cbf7a', '#b79ad1', '#e6c26a', '#79b8ad', '#d98aa5', '#8f9fd6'];
+const HAIRS = ['#2b211c', '#3d2a1e', '#1d1d22', '#5a3a22', '#2a2a2a', '#6b4a2c'];
+const FONT = '"Patrick Hand", "Comic Sans MS", cursive';
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/* ---------- classroom layout ---------- */
+const desks = [], students = [], blocks = [];
+for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) {
+  const cx = 110 + c * 185, top = 190 + r * 135;
+  desks.push({ x: cx - 45, y: top, w: 90, h: 44 });
+  students.push({ i: students.length, x: cx, y: top + 60, name: NAMES[students.length], shirt: SHIRTS[(r * 5 + c * 3) % SHIRTS.length], hair: HAIRS[(r + c * 2) % HAIRS.length], say: '', sayT: 0, nervous: 0 });
+  blocks.push({ x: cx - 45, y: top, w: 90, h: 44 });            // desk
+  blocks.push({ x: cx - 18, y: top + 44, w: 36, h: 26 });       // student in the chair
+}
+const podium = { x: 420, y: 76, w: 120, h: 36 };
+blocks.push(podium);
+const ROOM = { x0: 20, y0: 130, x1: W - 20, y1: H - 14 };
+
+function hitsBlock(x, y, r) {
+  if (x - r < ROOM.x0 || x + r > ROOM.x1 || y - r < 66 || y + r > ROOM.y1) return true;
+  return blocks.some(b => {
+    const nx = Math.max(b.x, Math.min(x, b.x + b.w)), ny = Math.max(b.y, Math.min(y, b.y + b.h));
+    return Math.hypot(x - nx, y - ny) < r;
+  });
+}
+
+// walkable grid for click-to-move, so the teacher walks around desks instead of stopping at them
+const CELL = 20, GC = W / CELL, GR = H / CELL;
+const free = [];
+for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) free.push(!hitsBlock(c * CELL + CELL / 2, r * CELL + CELL / 2, TEACHER_R));
+const cellOf = p => [Math.max(0, Math.min(GC - 1, Math.floor(p.x / CELL))), Math.max(0, Math.min(GR - 1, Math.floor(p.y / CELL)))];
+function nearestFree(c, r) {
+  let best = null, bd = 1e9;
+  for (let rr2 = 0; rr2 < GR; rr2++) for (let cc = 0; cc < GC; cc++) if (free[rr2 * GC + cc]) { const d = (cc - c) ** 2 + (rr2 - r) ** 2; if (d < bd) { bd = d; best = [cc, rr2]; } }
+  return best;
+}
+function findPath(from, to) {
+  let [sc, sr] = cellOf(from), [tc, tr] = cellOf(to);
+  const exact = free[tr * GC + tc] && !hitsBlock(to.x, to.y, TEACHER_R);
+  if (!free[tr * GC + tc]) [tc, tr] = nearestFree(tc, tr);
+  if (!free[sr * GC + sc]) [sc, sr] = nearestFree(sc, sr);
+  const start = sr * GC + sc, goal = tr * GC + tc, prev = new Int32Array(GC * GR).fill(-1);
+  prev[start] = start;
+  const q = [start];
+  for (let qi = 0; qi < q.length && prev[goal] < 0; qi++) {
+    const cur = q[qi], c = cur % GC, r = (cur / GC) | 0;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const nc = c + dc, nr = r + dr;
+      if (nc < 0 || nr < 0 || nc >= GC || nr >= GR) continue;
+      const ni = nr * GC + nc;
+      if (!free[ni] || prev[ni] >= 0) continue;
+      if (dc && dr && (!free[r * GC + nc] || !free[nr * GC + c])) continue;
+      prev[ni] = cur; q.push(ni);
+    }
+  }
+  if (prev[goal] < 0) return [];
+  const path = [];
+  for (let i = goal; i !== start; i = prev[i]) path.push({ x: (i % GC) * CELL + CELL / 2, y: ((i / GC) | 0) * CELL + CELL / 2 });
+  path.reverse();
+  if (exact) { path.pop(); path.push({ x: to.x, y: to.y }); }
+  return path;
+}
+
+/* ---------- state ---------- */
+let S;
+function reset() {
+  S = {
+    mode: 'intro', t: 0,
+    teacher: { x: 480, y: 150, dir: 1, step: 0 },
+    target: null, path: [],
+    notes: NOTE_NAMES.map((n, i) => ({ id: i, name: n, count: 0, state: 'wait', holder: -1, wait: 0, spawn: SPAWN_AT[i] })),
+    fx: [], caught: 0,
+  };
+  students.forEach(s => { s.say = ''; s.sayT = 0; s.nervous = 0; });
+  renderHud();
+}
+
+function say(s, text, t = 1.6) { s.say = text; s.sayT = t; }
+function fx(x, y, text, color) { S.fx.push({ x, y, text, color, t: 1.2 }); }
+function holderOf(i) { return S.notes.some(n => n.state === 'held' && n.holder === i); }
+
+function throwWait() {
+  const e = S.t;
+  return rnd(Math.max(.9, 2.2 - e / 60), Math.max(1.6, 3.4 - e / 50));
+}
+
+/* ---------- note logic ---------- */
+function give(n, si) {
+  n.state = 'held'; n.holder = si; n.count++; n.wait = throwWait(); n.panic = false;
+  const s = students[si];
+  if (n.count >= MAX_COUNT) { say(s, 'Everyone knows now!', 3); lose(n); return; }
+  if (Math.random() < .35) say(s, pick(['hehe', 'Got it!', 'What does it say?', 'lol', 'Pass it on!']));
+  renderHud();
+}
+
+function throwNote(n) {
+  const from = students[n.holder];
+  const cands = students.filter(s => s.i !== from.i && dist(s, from) < 420 && !holderOf(s.i));
+  const to = cands.length ? pick(cands) : pick(students.filter(s => s.i !== from.i));
+  const missP = n.panic ? .55 : .3;
+  let land = { x: to.x, y: to.y }, miss = false;
+  if (Math.random() < missP) {
+    for (let k = 0; k < 40; k++) {
+      const a = rnd(0, Math.PI * 2), d = rnd(55, 120);
+      const p = { x: to.x + Math.cos(a) * d, y: to.y + Math.sin(a) * d };
+      if (!hitsBlock(p.x, p.y, 12) && p.y > 150) { land = p; miss = true; break; }
+    }
+  }
+  const d = dist(from, land);
+  // pos and h are set here too: the note is drawn this frame, before its first flight update
+  Object.assign(n, { state: 'fly', from: { x: from.x, y: from.y - 6 }, pos: { x: from.x, y: from.y - 6 }, h: 0, land, to: to.i, miss, ft: 0, dur: .35 + d / 340, holder: -1 });
+  if (n.panic) say(from, pick(['Catch!', 'Teacher!', 'Aaah!']), 1.2);
+}
+
+function confiscate(n, how) {
+  n.state = 'caught'; S.caught++;
+  fx(S.teacher.x, S.teacher.y - 34, how, '#c8322b');
+  const near = students.slice().sort((a, b) => dist(a, S.teacher) - dist(b, S.teacher))[0];
+  say(near, pick(['Oh no!', 'Busted...', "Wasn't me!", 'Sorry!']), 1.6);
+  renderHud();
+  if (S.caught >= NOTE_N) win();
+}
+
+function updateNotes(dt) {
+  const T = S.teacher;
+  for (const n of S.notes) {
+    if (n.state === 'wait') {
+      if (S.t >= n.spawn) {
+        const free = students.filter(s => !holderOf(s.i));
+        const far = free.filter(s => dist(s, T) > 320);
+        const s = pick(far.length ? far : free);
+        n.state = 'held'; n.holder = s.i; n.wait = throwWait() + .6; n.panic = false;
+        say(s, '(scribbling a note)', 1.8);
+        renderHud();
+      }
+    } else if (n.state === 'held') {
+      const s = students[n.holder];
+      const near = dist(T, s) < PANIC_R;
+      s.nervous = near ? .3 : Math.max(0, s.nervous - dt);
+      if (near && !n.panic) { n.panic = true; n.wait = Math.min(n.wait, rnd(.25, .5)); say(s, '!', .8); }
+      n.wait -= dt;
+      if (n.wait <= 0) throwNote(n);
+    } else if (n.state === 'fly') {
+      n.ft += dt;
+      const k = Math.min(1, n.ft / n.dur);
+      n.pos = { x: n.from.x + (n.land.x - n.from.x) * k, y: n.from.y + (n.land.y - n.from.y) * k };
+      n.h = Math.sin(k * Math.PI) * (36 + n.dur * 30);
+      if (dist(T, n.pos) < CATCH_FLY) { confiscate(n, 'Intercepted!'); continue; }
+      if (k >= 1) {
+        if (n.miss) { n.state = 'floor'; n.floorT = FLOOR_TIME; fx(n.land.x, n.land.y - 18, 'Missed!', '#a06a00'); }
+        else give(n, n.to);
+      }
+    } else if (n.state === 'floor') {
+      n.floorT -= dt;
+      if (dist(T, n.land) < CATCH_FLOOR) { confiscate(n, 'Confiscated!'); continue; }
+      if (n.floorT <= 0) {
+        const s = students.slice().sort((a, b) => dist(a, n.land) - dist(b, n.land))[0];
+        say(s, 'Got it back~', 1.2);
+        give(n, s.i);
+      }
+    }
+    if (S.mode !== 'play') return;
+  }
+}
+
+/* ---------- teacher ---------- */
+const keys = new Set();
+function updateTeacher(dt) {
+  const T = S.teacher;
+  let vx = 0, vy = 0;
+  if (held('left')) vx--; if (held('right')) vx++;
+  if (held('up')) vy--; if (held('down')) vy++;
+  if (vx || vy) { S.target = null; S.path = []; }
+  else if (S.path.length) {
+    let wp = S.path[0];
+    while (wp && Math.hypot(wp.x - T.x, wp.y - T.y) < 4) { S.path.shift(); wp = S.path[0]; }
+    if (wp) { const dx = wp.x - T.x, dy = wp.y - T.y, d = Math.hypot(dx, dy); vx = dx / d; vy = dy / d; }
+    else S.target = null;
+  }
+  const m = Math.hypot(vx, vy);
+  if (!m) return;
+  const step = TEACHER_SPEED * dt;
+  vx = vx / m * step; vy = vy / m * step;
+  if (S.path.length) {
+    // don't overshoot the waypoint
+    const wp = S.path[0], d = Math.hypot(wp.x - T.x, wp.y - T.y);
+    if (d < step) { vx = wp.x - T.x; vy = wp.y - T.y; }
+  }
+  slideMove(T, vx, vy, step);
+  if (vx) T.dir = vx > 0 ? 1 : -1;
+  T.step += dt * 10;
+}
+
+// Move one axis at a time. When an axis is blocked near a corner, nudge sideways around it,
+// so brushing a desk edge slides past instead of stopping dead.
+const NUDGE = 18;
+function slideMove(T, vx, vy, step) {
+  const r = TEACHER_R;
+  if (vx) {
+    if (!hitsBlock(T.x + vx, T.y, r)) T.x += vx;
+    else if (!vy) {
+      for (let o = 1; o <= NUDGE; o++) {
+        const up = !hitsBlock(T.x + vx, T.y - o, r) && !hitsBlock(T.x, T.y - o, r);
+        const dn = !hitsBlock(T.x + vx, T.y + o, r) && !hitsBlock(T.x, T.y + o, r);
+        if (up || dn) { T.y += (up ? -1 : 1) * Math.min(step, o); break; }
+      }
+    }
+  }
+  if (vy) {
+    if (!hitsBlock(T.x, T.y + vy, r)) T.y += vy;
+    else if (!vx) {
+      for (let o = 1; o <= NUDGE; o++) {
+        const lf = !hitsBlock(T.x - o, T.y + vy, r) && !hitsBlock(T.x - o, T.y, r);
+        const rt = !hitsBlock(T.x + o, T.y + vy, r) && !hitsBlock(T.x + o, T.y, r);
+        if (lf || rt) { T.x += (lf ? -1 : 1) * Math.min(step, o); break; }
+      }
+    }
+  }
+}
+
+// e.code is the physical key, so WASD still works with a non-English layout or an input method switched on
+const CODEMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down' };
+const dirOf = e => CODEMAP[e.code] || KEYMAP[e.key];
+const D = { frames: 0, key: '-', taps: 0 };
+document.addEventListener('keydown', e => { D.key = e.code || e.key; const k = dirOf(e); if (k && S.mode === 'play') { keys.add(k); e.preventDefault(); } }, true);
+document.addEventListener('keyup', e => { const k = dirOf(e); if (k) keys.delete(k); }, true);
+addEventListener('blur', () => { keys.clear(); padKeys.clear(); });
+
+// on-screen arrows: hold to walk; works for mouse and touch alike
+const padKeys = new Set();
+document.querySelectorAll('.pad button').forEach(b => {
+  const dir = b.dataset.dir;
+  const on = e => { e.preventDefault(); D.taps++; padKeys.add(dir); b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (_) {} };
+  const off = () => { padKeys.delete(dir); b.classList.remove('on'); };
+  b.addEventListener('pointerdown', on);
+  ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach(t => b.addEventListener(t, off));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+const held = d => keys.has(d) || padKeys.has(d);
+function worldPt(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
+let dragging = false;
+cv.addEventListener('pointerdown', e => {
+  cv.focus({ preventScroll: true });
+  if (S.mode !== 'play') return;
+  e.preventDefault();
+  D.taps++;
+  dragging = true;
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  moveTo(worldPt(e));
+});
+cv.addEventListener('pointermove', e => { if (dragging) moveTo(worldPt(e)); });
+function moveTo(p) { S.target = p; S.path = findPath(S.teacher, p); }
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cv.addEventListener(t, () => { dragging = false; }));
+
+/* ---------- drawing ---------- */
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function drawRoom() {
+  ctx.fillStyle = '#e9d6b4'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(120,85,45,.18)'; ctx.lineWidth = 2;
+  for (let y = 70; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let y = 70, row = 0; y < H; y += 34, row++) for (let x = (row % 2) * 90; x < W; x += 180) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 34); ctx.stroke(); }
+  ctx.fillStyle = '#cfd8cf'; ctx.fillRect(0, 0, W, 64);
+  ctx.fillStyle = '#9a7a52'; ctx.fillRect(196, 4, 568, 52);
+  ctx.fillStyle = '#2f4a3f'; ctx.fillRect(202, 8, 556, 42);
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '28px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('No passing notes in class!', 480, 30);
+  ctx.fillStyle = '#7d8a80'; ctx.fillRect(0, 62, W, 4);
+  ctx.fillStyle = '#8c6239'; rr(podium.x, podium.y, podium.w, podium.h, 6); ctx.fill();
+  ctx.fillStyle = '#f4f1e6'; ctx.fillRect(podium.x + 14, podium.y + 8, 30, 20); ctx.fillStyle = '#c8322b'; ctx.fillRect(podium.x + 70, podium.y + 14, 34, 5);
+  desks.forEach((d, i) => {
+    ctx.fillStyle = 'rgba(0,0,0,.12)'; rr(d.x + 3, d.y + 5, d.w, d.h, 5); ctx.fill();
+    ctx.fillStyle = '#b98a57'; rr(d.x, d.y, d.w, d.h, 5); ctx.fill();
+    ctx.fillStyle = '#a77a49'; ctx.fillRect(d.x + d.w / 2 - 1, d.y + 3, 2, d.h - 6);
+    ctx.fillStyle = i % 3 ? '#f6f3ea' : '#dfe8f2'; ctx.save(); ctx.translate(d.x + 22 + (i % 2) * 40, d.y + 20); ctx.rotate((i % 5 - 2) * .08); ctx.fillRect(-12, -9, 24, 18); ctx.restore();
+  });
+}
+function drawNoteShape(x, y, s, count) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#fffdf4'; ctx.strokeStyle = '#8a8370'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-9 * s, -6 * s); ctx.lineTo(9 * s, -6 * s); ctx.lineTo(9 * s, 6 * s); ctx.lineTo(-9 * s, 6 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9 * s, -6 * s); ctx.lineTo(0, 1 * s); ctx.lineTo(9 * s, -6 * s); ctx.stroke();
+  if (count != null) {
+    ctx.fillStyle = count >= 7 ? '#c8322b' : '#2f4a3f';
+    ctx.beginPath(); ctx.arc(11 * s, -8 * s, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(count, 11 * s, -7.5 * s);
+  }
+  ctx.restore();
+}
+function drawStudent(s) {
+  const held = S.notes.find(n => n.state === 'held' && n.holder === s.i);
+  const shake = (s.nervous > 0 ? Math.sin(S.t * 50) * 1.5 : 0);
+  const x = s.x + shake, y = s.y;
+  ctx.fillStyle = 'rgba(0,0,0,.13)'; ctx.beginPath(); ctx.ellipse(x + 2, y + 4, 22, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = s.shirt; ctx.beginPath(); ctx.ellipse(x, y, 21, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f1c9a5'; ctx.beginPath(); ctx.arc(x, y - 4, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = s.hair; ctx.beginPath(); ctx.arc(x, y - 1, 10.5, Math.PI * 1.05, Math.PI * 1.95, true); ctx.fill();
+  if (held) drawNoteShape(x + (s.nervous ? -2 : 6), y - 18, .8, held.count);
+  if (s.nervous > 0) { ctx.fillStyle = '#5fb4e6'; ctx.beginPath(); ctx.arc(x + 13, y - 14, 3.5, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawTeacher() {
+  const T = S.teacher, bob = Math.sin(T.step) * 1.4;
+  ctx.fillStyle = 'rgba(200,50,43,.12)'; ctx.beginPath(); ctx.arc(T.x, T.y, PANIC_R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(T.x + 2, T.y + 6, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#34495e'; ctx.beginPath(); ctx.ellipse(T.x, T.y + bob * .3, 20, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#c8322b'; ctx.fillRect(T.x - 2, T.y - 6, 4, 12);
+  ctx.fillStyle = '#f1c9a5'; ctx.beginPath(); ctx.arc(T.x, T.y - 6 + bob * .3, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#4a3326'; ctx.beginPath(); ctx.arc(T.x, T.y - 9 + bob * .3, 11, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.arc(T.x - T.dir * 2, T.y - 18 + bob * .3, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(T.x - 4 + T.dir * 1.5, T.y - 4, 3, 0, Math.PI * 2); ctx.moveTo(T.x + 7 + T.dir * 1.5, T.y - 4); ctx.arc(T.x + 4 + T.dir * 1.5, T.y - 4, 3, 0, Math.PI * 2); ctx.stroke();
+}
+function drawBubble(x, y, text) {
+  ctx.font = '17px ' + FONT;
+  const w = ctx.measureText(text).width + 14;
+  const bx = Math.max(4, Math.min(W - w - 4, x - w / 2)), by = y - 56;
+  ctx.fillStyle = '#fffef8'; ctx.strokeStyle = '#2f4a3f'; ctx.lineWidth = 1.5;
+  rr(bx, by, w, 24, 8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#22302a'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 7, by + 13);
+}
+function draw() {
+  drawRoom();
+  for (const n of S.notes) if (n.state === 'floor') {
+    const blink = n.floorT < 1.2 && Math.floor(n.floorT * 8) % 2;
+    ctx.fillStyle = 'rgba(200,50,43,.25)'; ctx.beginPath(); ctx.arc(n.land.x, n.land.y, 18, 0, Math.PI * 2); ctx.fill();
+    if (!blink) drawNoteShape(n.land.x, n.land.y, 1, n.count);
+    ctx.strokeStyle = '#c8322b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(n.land.x, n.land.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (n.floorT / FLOOR_TIME)); ctx.stroke();
+  }
+  const actors = [...students.map(s => ({ y: s.y, f: () => drawStudent(s) })), { y: S.teacher.y, f: drawTeacher }].sort((a, b) => a.y - b.y);
+  actors.forEach(a => a.f());
+  for (const n of S.notes) if (n.state === 'fly') {
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(n.pos.x, n.pos.y, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(n.pos.x, n.pos.y - n.h); ctx.rotate(n.ft * 9); drawNoteShape(0, 0, 1, null); ctx.restore();
+  }
+  students.forEach(s => { if (s.sayT > 0) drawBubble(s.x, s.y, s.say); });
+  S.fx.forEach(f => {
+    ctx.globalAlpha = Math.min(1, f.t * 1.5);
+    ctx.font = '26px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#fffef8'; ctx.strokeText(f.text, f.x, f.y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+    ctx.globalAlpha = 1;
+  });
+  if (S.target && S.mode === 'play') { ctx.strokeStyle = 'rgba(47,74,63,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(S.target.x, S.target.y, 8, 0, Math.PI * 2); ctx.stroke(); }
+}
+
+/* ---------- HUD ---------- */
+const notesBox = $('notes');
+function renderHud() {
+  notesBox.innerHTML = S.notes.map(n => {
+    const cls = n.state === 'caught' ? 'done' : n.state === 'wait' ? 'wait' : n.count >= 7 ? 'hot' : '';
+    const txt = n.state === 'caught' ? 'Confiscated' : n.state === 'wait' ? 'Not yet' : `${n.count} / ${MAX_COUNT}`;
+    return `<div class="slot ${cls}"><div class="row"><span class="nm">${n.name}</span><span class="ct">${txt}</span></div><div class="bar"><i style="width:${n.count / MAX_COUNT * 100}%"></i></div></div>`;
+  }).join('');
+  $('caughtTxt').textContent = S.caught;
+}
+const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+/* ---------- flow ---------- */
+function start() {
+  reset(); S.mode = 'play'; keys.clear();
+  $('introCard').hidden = true; $('endCard').hidden = true;
+  cv.focus({ preventScroll: true });
+}
+function endWith(title, text) {
+  S.mode = 'over'; keys.clear(); S.target = null; S.path = [];
+  $('endTitle').textContent = title; $('endText').textContent = text;
+  setTimeout(() => { $('endCard').hidden = false; $('againBtn').focus({ preventScroll: true }); }, 700);
+}
+function win() {
+  let best = null;
+  try { best = parseFloat(localStorage.getItem('passnote-best')); if (!best || S.t < best) localStorage.setItem('passnote-best', S.t); } catch (e) {}
+  endWith('All notes confiscated!', `You got all 5 notes in ${fmt(S.t)}. The classroom is finally quiet.`);
+  $('endBest').textContent = best && best < S.t ? `Your best time is ${fmt(best)}.` : 'That is your best time.';
+}
+function lose(n) {
+  renderHud();
+  endWith('The whole class knows...', `${n.name} was passed ${MAX_COUNT} times, and now everyone has read it. You confiscated ${S.caught} of 5 and lasted ${fmt(S.t)}.`);
+  $('endBest').textContent = '';
+}
+$('startBtn').onclick = start;
+$('againBtn').onclick = start;
+
+// the loop runs on requestAnimationFrame, with a timer as backup in case the frame callback is held back
+let last = performance.now(), lastRaf = 0;
+function tick() {
+  const now = performance.now();
+  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
+  D.frames++;
+  if (S.mode === 'play') {
+    S.t += dt;
+    updateTeacher(dt);
+    updateNotes(dt);
+    $('timeTxt').textContent = fmt(S.t);
+  }
+  students.forEach(s => { s.sayT = Math.max(0, s.sayT - dt); if (S.mode !== 'play') s.nervous = 0; });
+  S.fx.forEach(f => { f.t -= dt; f.y -= dt * 30; }); S.fx = S.fx.filter(f => f.t > 0);
+  draw();
+}
+// schedule the next frame first, so one bad frame can never stop the game
+function rafLoop() { requestAnimationFrame(rafLoop); lastRaf = performance.now(); tick(); }
+setInterval(() => { if (performance.now() - lastRaf > 100) tick(); }, 33);
+setInterval(() => {
+  const d = $('diag'); if (d.classList.contains('err')) return;
+  d.textContent = `v5 · frames ${D.frames} · last key ${D.key} · taps ${D.taps} · teacher ${S.teacher.x | 0},${S.teacher.y | 0}`;
+}, 250);
+reset();
+requestAnimationFrame(rafLoop);
+window.__zt = { get S() { return S; }, students, moveTo: p => moveTo(p), step(dt) { if (S.mode === 'play') { S.t += dt; updateTeacher(dt); updateNotes(dt); } } };
+})();
+</script>
+</body>
+</html>
