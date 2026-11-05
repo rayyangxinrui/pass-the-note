@@ -7,7 +7,7 @@
 <title>Pass the Note</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Special+Elite&display=swap">
 <style>
 /* Layout: a slim HUD of the five notes above a top-down classroom canvas; intro and result cards sit over the canvas; rules below. */
 :root{
@@ -70,6 +70,30 @@ kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-botto
 .rules h2{font-size:24px}
 .rules ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;color:var(--muted)}
 @media (max-width:560px){.card{padding:16px}}
+/* the end page: a photocopied zine, so it keeps its own black-and-white-and-red look in both themes */
+.endActs{display:flex;flex-wrap:wrap;gap:8px}
+#zine{background:#efeee9;color:#191919;padding:clamp(18px,4vw,38px);border-radius:3px;box-shadow:0 12px 30px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:22px;overflow:hidden}
+.ransom{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin:0;font-weight:400}
+.ransom span{display:inline-block;padding:1px 8px;font-size:clamp(25px,5vw,44px);line-height:1.15;background:#fffef9;color:#111;box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+.ransom span:nth-child(3n+1){background:#141414;color:#f5f4ef;font-family:"Special Elite",monospace}
+.ransom span:nth-child(3n+2){font-family:Georgia,"Times New Roman",serif;font-style:italic;transform:rotate(-3deg)}
+.ransom span:nth-child(3n){font-family:"Patrick Hand",cursive;background:#c8322b;color:#fff;transform:rotate(2deg)}
+.zineSub{margin:0;font-family:"Special Elite",monospace;font-size:14px;color:#3b3b3b}
+.clips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:30px 24px;align-items:center}
+.clip{position:relative;margin:0;min-width:0;display:flex;flex-direction:column;gap:5px}
+.clip.wide{grid-column:1/-1}
+.scrap{position:relative;background:#fbfaf4;padding:14px 16px;box-shadow:2px 3px 0 rgba(0,0,0,.2)}
+.scrap img{display:block;width:100%;height:auto;filter:grayscale(1) contrast(1.25);mix-blend-mode:multiply}
+.scrap p{margin:0;font-family:"Special Elite",monospace;font-size:17px;line-height:1.45}
+.clip::before{content:"";position:absolute;top:-10px;left:50%;width:74px;height:22px;margin-left:-37px;background:rgba(214,200,140,.62);transform:rotate(-3deg);z-index:1}
+.clip figcaption{font-family:"Patrick Hand",cursive;color:#c8322b;font-size:18px;line-height:1.2}
+.clip.lost .scrap{background:transparent;border:2px dashed #8a8a84;box-shadow:none;padding:24px 16px;text-align:center}
+.clip.lost::before{display:none}
+.clip.lost .scrap p{font-size:14px;color:#55554f}
+.zineFoot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.zineFoot small{font-family:"Special Elite",monospace;color:#55554f;font-size:12px}
+.zineFoot button{background:#141414;color:#f5f4ef;border-color:#141414}
+@media (max-width:600px){.clips{grid-template-columns:1fr}.clip.wide{grid-column:auto}.scrap p{font-size:15px}}
 .controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,44px);gap:6px;user-select:none;-webkit-user-select:none}
 .pad button{padding:0;font-size:18px;touch-action:none}
@@ -106,10 +130,22 @@ kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-botto
         <h2 id="endTitle"></h2>
         <p id="endText"></p>
         <p class="muted" id="endBest"></p>
-        <button class="btn-main" id="againBtn">Teach another class</button>
+        <div class="endActs">
+          <button class="btn-main" id="zineBtn">See the notes you confiscated</button>
+          <button id="againBtn">Teach another class</button>
+        </div>
       </div>
     </div>
   </div>
+  <section id="zine" hidden aria-labelledby="zineTitle">
+    <h2 class="ransom" id="zineTitle"></h2>
+    <p class="zineSub" id="zineSub"></p>
+    <div class="clips" id="clips"></div>
+    <div class="zineFoot">
+      <small id="zineCredits"></small>
+      <button id="zineAgain">Teach another class</button>
+    </div>
+  </section>
   <div class="controls">
     <div class="pad" aria-label="Walk buttons">
       <button type="button" data-dir="up" aria-label="Walk up">▲</button>
@@ -152,6 +188,16 @@ const $ = id => document.getElementById(id);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+// what each note says, shown on the end page. text = typed strip, img = clipping from the reading.
+// credit is left empty until the team confirms each source.
+const CLIPS = [
+  { text: 'The imagination is one of the most fructuous of human faculties, creating art as well as nations.', tilt: -1.6, credit: '' },
+  { img: 'assets/clip-subterranean.png', wide: true, tilt: 1, credit: '', alt: 'Book clipping: zines as the variegated voices of a subterranean world, staking out an identity through the cracks of capitalism.' },
+  { text: 'the right to feel, the right to imagine and the right to identify', tilt: 1.8, credit: '' },
+  { img: 'assets/clip-culture.png', tilt: -1.2, credit: '', alt: 'Clipping: Culture doesn’t merely add local colour: it profoundly shapes the content of our emotional lives.' },
+  { img: 'assets/clip-crack.png', wide: true, tilt: -.8, credit: '', alt: 'Book clipping: perhaps zines were the crack in the seemingly impenetrable wall of the system.' },
+];
 
 /* ---------- classroom layout ---------- */
 const desks = [], students = [], blocks = [];
@@ -508,13 +554,46 @@ const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2,
 /* ---------- flow ---------- */
 function start() {
   reset(); S.mode = 'play'; keys.clear();
-  $('introCard').hidden = true; $('endCard').hidden = true;
+  $('introCard').hidden = true; $('endCard').hidden = true; $('zine').hidden = true;
+  $('app').scrollIntoView({ block: 'start' });
   cv.focus({ preventScroll: true });
+}
+// a rough paper edge: a polygon with a slightly different outline for every clipping
+function tornEdge() {
+  const pts = [], n = 16, jag = () => (Math.random() * 3).toFixed(1);
+  for (let i = 0; i <= n; i++) pts.push(`${(i / n * 100).toFixed(1)}% ${jag()}%`);
+  for (let i = n; i >= 0; i--) pts.push(`${(i / n * 100).toFixed(1)}% ${(100 - jag()).toFixed(1)}%`);
+  return `polygon(${pts.join(',')})`;
+}
+function showZine() {
+  const title = S.caught ? 'CONFISCATED' : 'NOTHING CAUGHT';
+  $('zineTitle').setAttribute('aria-label', title);
+  $('zineTitle').innerHTML = [...title].filter(c => c !== ' ').map(c => `<span aria-hidden="true">${c}</span>`).join('');
+  $('zineSub').textContent = S.caught === NOTE_N ? 'Everything the class was passing around. All 5 notes, now in your desk drawer.' : `You read ${S.caught} of 5. The rest are still going around the class.`;
+  const box = $('clips'); box.innerHTML = '';
+  S.notes.forEach((n, i) => {
+    const c = CLIPS[i], fig = document.createElement('figure');
+    const got = n.state === 'caught';
+    fig.className = 'clip' + (got ? '' : ' lost') + (got && c.wide ? ' wide' : '');
+    fig.style.transform = `rotate(${got ? c.tilt : 0}deg)`;
+    const scrap = document.createElement('div'); scrap.className = 'scrap';
+    if (!got) { const p = document.createElement('p'); p.textContent = 'You never caught this one.'; scrap.append(p); }
+    else if (c.img) { const im = document.createElement('img'); im.src = c.img; im.alt = c.alt; scrap.append(im); scrap.style.clipPath = tornEdge(); }
+    else { const p = document.createElement('p'); p.textContent = c.text; scrap.append(p); scrap.style.clipPath = tornEdge(); }
+    const cap = document.createElement('figcaption');
+    cap.textContent = `${n.name}, passed ${n.count} ${n.count === 1 ? 'time' : 'times'}`;
+    fig.append(scrap, cap); box.append(fig);
+  });
+  const credits = CLIPS.filter((c, i) => c.credit && S.notes[i].state === 'caught').map(c => c.credit);
+  $('zineCredits').textContent = credits.length ? 'From: ' + credits.join(' / ') : '';
+  $('endCard').hidden = true; $('zine').hidden = false;
+  $('zine').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function endWith(title, text) {
   S.mode = 'over'; keys.clear(); S.target = null; S.path = [];
   $('endTitle').textContent = title; $('endText').textContent = text;
-  setTimeout(() => { $('endCard').hidden = false; $('againBtn').focus({ preventScroll: true }); }, 700);
+  $('zineBtn').hidden = !S.caught;
+  setTimeout(() => { $('endCard').hidden = false; $(S.caught ? 'zineBtn' : 'againBtn').focus({ preventScroll: true }); }, 700);
 }
 function win() {
   let best = null;
@@ -529,6 +608,8 @@ function lose(n) {
 }
 $('startBtn').onclick = start;
 $('againBtn').onclick = start;
+$('zineAgain').onclick = start;
+$('zineBtn').onclick = showZine;
 
 // the loop runs on requestAnimationFrame, with a timer as backup in case the frame callback is held back
 let last = performance.now(), lastRaf = 0;
@@ -551,7 +632,7 @@ function rafLoop() { requestAnimationFrame(rafLoop); lastRaf = performance.now()
 setInterval(() => { if (performance.now() - lastRaf > 100) tick(); }, 33);
 setInterval(() => {
   const d = $('diag'); if (d.classList.contains('err')) return;
-  d.textContent = `v5 · frames ${D.frames} · last key ${D.key} · taps ${D.taps} · teacher ${S.teacher.x | 0},${S.teacher.y | 0}`;
+  d.textContent = `v6 · frames ${D.frames} · last key ${D.key} · taps ${D.taps} · teacher ${S.teacher.x | 0},${S.teacher.y | 0}`;
 }, 250);
 reset();
 requestAnimationFrame(rafLoop);
